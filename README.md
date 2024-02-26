@@ -1,6 +1,7 @@
 # metric_shopee_crawler_demo
 
 Install venv
+
     python3 -m venv .
     
 Linux/MacOS
