@@ -1,5 +1,4 @@
 selenium
-beautifulsoup
 pandas
 undetected_chromedriver
 setuptools
