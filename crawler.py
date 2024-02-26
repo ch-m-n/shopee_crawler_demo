@@ -33,7 +33,7 @@ class Spyder:
         self.login_url = "https://shopee.vn/buyer/login"
         self.account = os.getenv('ACCOUNT')
         self.password = os.getenv('PASSWORD')
-
+        self.total_crawl = 0
         self.driver = uc.Chrome()
 
     def get_front_page(self):
@@ -115,7 +115,12 @@ class Spyder:
         if (self.is_comfirm_required()==True):
             self.driver.find_element(By.CLASS_NAME, 'dWxniD').click()
             sleep(59)
-                
+
+
+
+
+
+
     def view_data(self, tag):
         """
         The `view_data` function collects product data from a webpage, processes it, and saves it to a
@@ -125,18 +130,24 @@ class Spyder:
         data being processed. It is used to name the CSV file that will be created with the extracted
         data
         """
+        """
+            test2 transform dữ liệu đã lấy sang định dạng csv
+        """
         data = {'product_name':[], 'product_url':[], 'product_rating':[], 'product_price':[], 'product_revenue':[]}
         sleep(10)
         total_products = self.driver.find_elements(By.CLASS_NAME, "shopee-search-item-result__item")
 
-        for product in total_products:
-            total_sell = product.find_element(By.CLASS_NAME,'OwmBnn').text
+        #Transform dữ liệu đã lấy được ra định dạng csv
+        for i in range(1, len(total_products)):
+            total_sell_xpath = '/html/body/div[1]/div/div[2]/div/div/div[4]/div[2]/section/ul/li['+str(i)+']/a/div/div/div[2]/div[3]/div[2]'
+            total_sell = total_products[i].find_element(By.XPATH,total_sell_xpath).text
             total_sell = total_sell.replace(',', '.')
             num = [float(num) for num in re.findall(r'[\d.]+', total_sell)]
             sell_num = 0       
             if(total_sell.endswith('k')):
                 sell_num = num[0]*1000
-            prices = product.find_elements(By.CLASS_NAME,'IWBsMB')
+            prices_xpath = '/html/body/div[1]/div/div[2]/div/div/div[4]/div[2]/section/ul/li['+str(i)+']/a/div/div/div[2]/div[2]'
+            prices = total_products[i].find_elements(By.XPATH,prices_xpath)
             possible_price = 0
             for price in prices:
                 multi_price = price.find_elements(By.CLASS_NAME,'k9JZlv')
@@ -147,7 +158,7 @@ class Spyder:
                     possible_price = multi_price[0].text
                     possible_price = float(possible_price.replace('.', ''))
 
-            stars = product.find_elements(By.CLASS_NAME,'shopee-rating-stars__lit')
+            stars = total_products[i].find_elements(By.CLASS_NAME,'shopee-rating-stars__lit')
             rating = 0
             rate = "{:.2f}".format(rating)
             for star in stars:
@@ -160,8 +171,10 @@ class Spyder:
                     rating += 1.0
                 else:
                     rating += float(value)/100
-            data['product_name'].append(product.find_element(By.CLASS_NAME,'DgXDzJ').text)
-            data['product_url'].append(product.find_element(By.TAG_NAME,'a').get_attribute('href'))
+
+            name_xpath = '/html/body/div[1]/div/div[2]/div/div/div[4]/div[2]/section/ul/li['+str(i)+']/a/div/div/div[2]/div[1]/div[1]/div'
+            data['product_name'].append(total_products[i].find_element(By.CLASS_NAME,name_xpath).text)
+            data['product_url'].append(total_products[i].find_element(By.TAG_NAME,'a').get_attribute('href'))
             data['product_rating'].append(rate)
             data['product_price'].append(possible_price)
             data['product_revenue'].append(sell_num*possible_price)
@@ -169,10 +182,16 @@ class Spyder:
         df = pd.DataFrame(data)
         df.to_csv('.\\data\\'+str(tag)+'_products.csv', sep='\t', encoding='utf-8', index=False)
 
+
+
     def crawling(self):
         """
         The function crawls through a website, extracts category links, navigates through pages, and
         collects data.
+        """
+        """
+        test 1 : Crawl tất cả các sản phẩm thuộc các nhóm hàng lớn liệt kê ở trang chủ
+        của shopee.vn
         """
         cat = []
         sleep(10)
@@ -183,21 +202,33 @@ class Spyder:
         
         for link in cat:
             self.driver.get(link)
-            sleep(10)
+            sleep(20)
 
             total_page = self.driver.find_element(By.CLASS_NAME, "shopee-mini-page-controller__total").text
             current_page = self.driver.find_element(By.CLASS_NAME, "shopee-mini-page-controller__current").text
-            while int(current_page) < int(total_page):
+            next_page = 0
+            while next_page < int(total_page):
+                next_page+=1
                 self.view_data(re.findall(r'\d+', link )[0])
-                self.driver.get(link+'?page='+str(int(current_page)+1))
+                self.driver.get(link+'?page='+str(next_page+1))
+                sleep(20)
+                current_page = self.driver.find_element(By.CLASS_NAME, "shopee-mini-page-controller__current").text
 
             sub_cat = self.driver.find_elements(By.CLASS_NAME, "shopee-category-list__sub-category")
             for sub in sub_cat:
-                self.driver.get(sub.get_attribute('href'))
-                while int(current_page) < int(total_page):
-                    self.view_data(re.findall(r'\d+', link )[0])
-                    self.driver.get(link+'?page='+str(int(current_page)+1))
-
+                sub_link = self.driver.get(sub.get_attribute('href'))
+                self.driver.get(sub_link)
+                sleep(20)
+                total_page = self.driver.find_element(By.CLASS_NAME, "shopee-mini-page-controller__total").text
+                current_page = self.driver.find_element(By.CLASS_NAME, "shopee-mini-page-controller__current").text
+                next_page = 0
+                while current_page < int(total_page):
+                    next_page+=1
+                    self.view_data(re.findall(r'\d+', self.driver.get(sub.get_attribute('href')) )[0]+re.findall(r'\d+', self.driver.get(sub.get_attribute('href')) )[1])
+                    self.driver.get(sub_link+'?page='+str(next_page))
+                    sleep(20)
+                    current_page = self.driver.find_element(By.CLASS_NAME, "shopee-mini-page-controller__current").text
+    
 if __name__=="__main__": 
     crawl = Spyder()
     crawl.human_speed_login()
